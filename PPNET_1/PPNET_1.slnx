@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="PPNET_1.GUI/PPNET_1.GUI.csproj" />
+  <Project Path="PPNET_1.Tests/PPNET_1.Tests.csproj" />
+  <Project Path="PPNET_1/PPNET_1.csproj" />
+</Solution>
