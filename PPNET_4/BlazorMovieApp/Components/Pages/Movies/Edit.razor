@@ -1,0 +1,120 @@
+@page "/movies/edit/{Id:int}"
+@using BlazorMovieApp.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+
+<PageTitle>Edit Movie</PageTitle>
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            @if (movie == null)
+            {
+                <div class="alert alert-danger">
+                    Movie not found.
+                </div>
+                <a href="/movies" class="btn btn-secondary">Back to Movies</a>
+            }
+            else
+            {
+                <h1>✏️ Edit Movie</h1>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Title *</label>
+                            <input type="text" id="title" class="form-control" 
+                                   @bind="movie.Title" placeholder="Enter movie title" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Description</label>
+                            <textarea id="description" class="form-control" rows="4"
+                                      @bind="movie.Description" placeholder="Enter movie description"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="releaseDate" class="form-label">Release Date</label>
+                            <input type="date" id="releaseDate" class="form-control"
+                                   @bind="movie.ReleaseDate" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="imageUrl" class="form-label">Image URL</label>
+                            <input type="url" id="imageUrl" class="form-control"
+                                   @bind="movie.ImageUrl" placeholder="https://example.com/image.jpg" />
+                            @if (!string.IsNullOrEmpty(movie.ImageUrl))
+                            {
+                                <div class="mt-2">
+                                    <small class="text-muted">Preview:</small>
+                                    <br />
+                                    <img src="@movie.ImageUrl" alt="Preview" class="img-fluid mt-2" style="max-height: 200px;" />
+                                </div>
+                            }
+                        </div>
+
+                        <div class="alert alert-info">
+                            <strong>Current Rating:</strong> @($"{movie.AverageRate:F2}") / 10 (@movie.RatingCount ratings)
+                        </div>
+
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" @onclick="UpdateMovie">
+                                <span class="bi bi-check-circle"></span> Update
+                            </button>
+                            <a href="/movies" class="btn btn-secondary">
+                                <span class="bi bi-x-circle"></span> Cancel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Movie? movie;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            movie = await DbContext.Movies.FirstOrDefaultAsync(m => m.Id == Id);
+            if (movie == null)
+            {
+                NavigationManager.NavigateTo("/movies");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading movie: {ex.Message}");
+        }
+    }
+
+    private async Task UpdateMovie()
+    {
+        if (movie == null || string.IsNullOrWhiteSpace(movie.Title))
+        {
+            return;
+        }
+
+        try
+        {
+            DbContext.Movies.Update(movie);
+            await DbContext.SaveChangesAsync();
+
+            NavigationManager.NavigateTo("/movies");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating movie: {ex.Message}");
+        }
+    }
+}

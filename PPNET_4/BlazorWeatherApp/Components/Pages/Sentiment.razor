@@ -1,0 +1,92 @@
+@page "/sentiment"
+@rendermode InteractiveServer
+@using BlazorWeatherApp.MLModel
+@using BlazorWeatherApp.Services
+@inject ISentimentPredictor SentimentPredictor
+
+<PageTitle>Sentiment Analysis</PageTitle>
+
+<div class="container mt-4">
+    <h1>Sentiment Analysis</h1>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <p class="text-muted">Analyze the sentiment of any text. Our AI will determine if the sentiment is positive or negative.</p>
+
+            <div class="mb-3">
+                <label for="sentimentInput" class="form-label">Enter your text:</label>
+                <textarea 
+                    id="sentimentInput"
+                    class="form-control" 
+                    rows="4" 
+                    placeholder="Type something to analyze its sentiment..."
+                    @bind="userInput">
+                </textarea>
+            </div>
+
+            <button class="btn btn-primary" @onclick="AnalyzeSentiment">
+                <span class="bi bi-play-fill"></span> Analyze Sentiment
+            </button>
+        </div>
+    </div>
+
+    @if (prediction != null)
+    {
+        <div class="mt-4">
+            <h3>Analysis Result:</h3>
+
+            <div class="alert @(prediction.PredictedLabel == "Positive" ? "alert-success" : "alert-danger")" role="alert">
+                <h5>
+                    @if (prediction.PredictedLabel == "Positive")
+                    {
+                        <span>Positive Sentiment</span>
+                    }
+                    else
+                    {
+                        <span>Negative Sentiment</span>
+                    }
+                </h5>
+                <hr />
+                <p><strong>Label:</strong> @prediction.PredictedLabel</p>
+                <p><strong>Confidence:</strong> 
+                    <span class="badge bg-info">
+                        @($"{prediction.Score:P2}")
+                    </span>
+                </p>
+            </div>
+
+            <div class="progress mt-2">
+                <div 
+                    class="@(prediction.PredictedLabel == "Positive" ? "progress-bar bg-success" : "progress-bar bg-danger")" 
+                    role="progressbar" 
+                    style="width: @($"{prediction.Score * 100}%")"
+                    aria-valuenow="@((int)(prediction.Score * 100))" 
+                    aria-valuemin="0" 
+                    aria-valuemax="100">
+                    @($"{prediction.Score * 100:F1}%")
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string userInput = "";
+    private ModelOutput? prediction;
+
+    private void AnalyzeSentiment()
+    {
+        if (!string.IsNullOrWhiteSpace(userInput))
+        {
+            try
+            {
+                var input = new ModelInput { Text = userInput };
+                prediction = SentimentPredictor.Predict(input);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Prediction error: {ex.Message}");
+            }
+        }
+    }
+}

@@ -1,0 +1,196 @@
+@page "/movies/details/{Id:int}"
+@using BlazorMovieApp.Data
+@using BlazorMovieApp.MLModel
+@using BlazorMovieApp.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+@inject ISentimentPredictor SentimentPredictor
+
+<PageTitle>@(movie?.Title ?? "Movie Details")</PageTitle>
+
+<div class="container mt-4">
+    @if (movie == null)
+    {
+        <div class="alert alert-danger">
+            Movie not found.
+        </div>
+        <a href="/movies" class="btn btn-secondary">Back to Movies</a>
+    }
+    else
+    {
+        <div class="row">
+            <div class="col-md-4">
+                @if (!string.IsNullOrEmpty(movie.ImageUrl))
+                {
+                    <img src="@movie.ImageUrl" alt="@movie.Title" class="img-fluid rounded shadow" style="max-height: 500px; object-fit: cover;" />
+                }
+                else
+                {
+                    <div class="bg-light rounded text-center p-5">
+                        <span class="bi bi-image" style="font-size: 3rem; color: #ccc;"></span>
+                        <p class="text-muted mt-2">No image available</p>
+                    </div>
+                }
+            </div>
+
+            <div class="col-md-8">
+                <h1>@movie.Title</h1>
+
+                @if (movie.ReleaseDate.HasValue)
+                {
+                    <p class="text-muted">
+                        <strong>Release Date:</strong> @movie.ReleaseDate.Value.ToLongDateString()
+                    </p>
+                }
+
+                @if (movie.AverageRate.HasValue && movie.RatingCount > 0)
+                {
+                    <div class="mb-3">
+                        <h4>
+                            <span class="badge bg-warning">⭐ @($"{movie.AverageRate:F2}") / 10</span>
+                            <small class="text-muted">(@movie.RatingCount ratings)</small>
+                        </h4>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted"><em>No ratings yet</em></p>
+                }
+
+                <h3 class="mt-4">Description</h3>
+                <p>@(movie.Description ?? "No description available.")</p>
+
+                <div class="mt-4">
+                    <AuthorizeView>
+                        <Authorized>
+                            <a href="@($"movies/edit/{movie.Id}")" class="btn btn-warning">
+                                <span class="bi bi-pencil"></span> Edit
+                            </a>
+                            <a href="@($"movies/delete/{movie.Id}")" class="btn btn-danger">
+                                <span class="bi bi-trash"></span> Delete
+                            </a>
+                        </Authorized>
+                    </AuthorizeView>
+                    <a href="/movies" class="btn btn-secondary">
+                        <span class="bi bi-arrow-left"></span> Back to Movies
+                    </a>
+                </div>
+
+                <hr class="my-4" />
+
+                <h3>⭐ Add Your Rating</h3>
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="reviewText" class="form-label">Your Review (optional):</label>
+                            <textarea id="reviewText" class="form-control" rows="3" 
+                                      placeholder="Share your thoughts about this movie..."
+                                      @bind="newReview"></textarea>
+                            @if (!string.IsNullOrEmpty(sentimentFeedback))
+                            {
+                                <div class="alert alert-warning mt-2" role="alert">
+                                    <span class="bi bi-exclamation-triangle"></span> @sentimentFeedback
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ratingInput" class="form-label">Rating (1-10):</label>
+                            <input type="number" id="ratingInput" class="form-control" 
+                                   min="1" max="10" step="0.5"
+                                   @bind="newRating" />
+                        </div>
+
+                        <button class="btn btn-primary" @onclick="AddRating" disabled="@isSubmitting">
+                            <span class="bi bi-check-circle"></span> Submit Rating
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private Movie? movie;
+    private float newRating = 5;
+    private string newReview = "";
+    private string sentimentFeedback = "";
+    private bool isSubmitting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            movie = await DbContext.Movies.FirstOrDefaultAsync(m => m.Id == Id);
+            if (movie == null)
+            {
+                NavigationManager.NavigateTo("/movies");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading movie: {ex.Message}");
+        }
+    }
+
+    private async Task AddRating()
+    {
+        if (movie == null || newRating < 1 || newRating > 10)
+        {
+            return;
+        }
+
+        sentimentFeedback = "";
+        isSubmitting = true;
+
+        try
+        {
+            // Check review sentiment if review is provided
+            if (!string.IsNullOrWhiteSpace(newReview))
+            {
+                var input = new ModelInput { Text = newReview };
+                var prediction = SentimentPredictor.Predict(input);
+
+                // Reject very negative reviews
+                if (prediction.PredictedLabel == "Negative" && prediction.Score > 0.8f)
+                {
+                    sentimentFeedback = $"Your review appears to be very negative (confidence: {prediction.Score:P}). Please provide more constructive feedback.";
+                    isSubmitting = false;
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            // Update average rating
+            float currentTotal = (movie.AverageRate ?? 0) * movie.RatingCount;
+            movie.RatingCount++;
+            movie.AverageRate = (currentTotal + newRating) / movie.RatingCount;
+
+            DbContext.Movies.Update(movie);
+            await DbContext.SaveChangesAsync();
+
+            // Reset form
+            newRating = 5;
+            newReview = "";
+
+            // Refresh the page
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding rating: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+}

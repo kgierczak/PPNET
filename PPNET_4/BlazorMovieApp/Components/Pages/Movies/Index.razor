@@ -1,0 +1,185 @@
+@page "/movies"
+@using BlazorMovieApp.Data
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject NavigationManager NavigationManager
+
+<PageTitle>Movies</PageTitle>
+
+<div class="container mt-4">
+    <div class="row align-items-center mb-4">
+        <div class="col">
+            <h1>🎬 Movie Ratings</h1>
+        </div>
+        <div class="col-auto">
+            <AuthorizeView>
+                <Authorized>
+                    <a href="movies/create" class="btn btn-primary">
+                        <span class="bi bi-plus-circle"></span> Add New Movie
+                    </a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+    </div>
+
+    @if (movies == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading movies...</p>
+        </div>
+    }
+    else if (movies.Count == 0)
+    {
+        <div class="alert alert-info">
+            No movies found. <a href="movies/create">Add one now!</a>
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>
+                            <a href="@("javascript:void(0)")" @onclick="@(() => SortBy("Title"))" 
+                               class="text-white text-decoration-none">
+                                📽️ Title @GetSortIcon("Title")
+                            </a>
+                        </th>
+                        <th>
+                            <a href="@("javascript:void(0)")" @onclick="@(() => SortBy("ReleaseDate"))" 
+                               class="text-white text-decoration-none">
+                                📅 Release Date @GetSortIcon("ReleaseDate")
+                            </a>
+                        </th>
+                        <th>
+                            <a href="@("javascript:void(0)")" @onclick="@(() => SortBy("AverageRate"))" 
+                               class="text-white text-decoration-none">
+                                ⭐ Average Rating @GetSortIcon("AverageRate")
+                            </a>
+                        </th>
+                        <th>
+                            <a href="@("javascript:void(0)")" @onclick="@(() => SortBy("RatingCount"))" 
+                               class="text-white text-decoration-none">
+                                📊 Ratings Count @GetSortIcon("RatingCount")
+                            </a>
+                        </th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var movie in GetSortedMovies())
+                    {
+                        <tr>
+                            <td>
+                                <strong>@movie.Title</strong>
+                            </td>
+                            <td>
+                                @if (movie.ReleaseDate.HasValue)
+                                {
+                                    @movie.ReleaseDate.Value.ToShortDateString()
+                                }
+                            </td>
+                            <td>
+                                @if (movie.AverageRate.HasValue && movie.RatingCount > 0)
+                                {
+                                    <span class="badge bg-warning">@($"{movie.AverageRate:F2}")</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No ratings</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge bg-secondary">@movie.RatingCount</span>
+                            </td>
+                            <td>
+                                <a href="@($"movies/details/{movie.Id}")" class="btn btn-sm btn-info">
+                                    <span class="bi bi-eye"></span> View
+                                </a>
+                                <AuthorizeView>
+                                    <Authorized>
+                                        <a href="@($"movies/edit/{movie.Id}")" class="btn btn-sm btn-warning">
+                                            <span class="bi bi-pencil"></span> Edit
+                                        </a>
+                                        <a href="@($"movies/delete/{movie.Id}")" class="btn btn-sm btn-danger">
+                                            <span class="bi bi-trash"></span> Delete
+                                        </a>
+                                    </Authorized>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Movie>? movies;
+    private string sortColumn = "Title";
+    private bool isAscending = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            movies = await DbContext.Movies
+                .OrderBy(m => m.Title)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading movies: {ex.Message}");
+            movies = new List<Movie>();
+        }
+    }
+
+    private void SortBy(string column)
+    {
+        if (sortColumn == column)
+        {
+            isAscending = !isAscending;
+        }
+        else
+        {
+            sortColumn = column;
+            isAscending = true;
+        }
+    }
+
+    private IEnumerable<Movie> GetSortedMovies()
+    {
+        if (movies == null) return Enumerable.Empty<Movie>();
+
+        return sortColumn switch
+        {
+            "Title" => isAscending 
+                ? movies.OrderBy(m => m.Title) 
+                : movies.OrderByDescending(m => m.Title),
+            "ReleaseDate" => isAscending 
+                ? movies.OrderBy(m => m.ReleaseDate) 
+                : movies.OrderByDescending(m => m.ReleaseDate),
+            "AverageRate" => isAscending 
+                ? movies.OrderBy(m => m.AverageRate ?? 0) 
+                : movies.OrderByDescending(m => m.AverageRate ?? 0),
+            "RatingCount" => isAscending 
+                ? movies.OrderBy(m => m.RatingCount) 
+                : movies.OrderByDescending(m => m.RatingCount),
+            _ => movies.OrderBy(m => m.Title)
+        };
+    }
+
+    private string GetSortIcon(string column)
+    {
+        if (sortColumn != column) return "";
+        return isAscending ? "🔼" : "🔽";
+    }
+}
